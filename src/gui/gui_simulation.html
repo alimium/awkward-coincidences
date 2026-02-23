@@ -446,16 +446,12 @@
           <button class="btn primary" id="btn-play" onclick="togglePlay()">▶ Play</button>
           <button class="btn" onclick="stepBy(-1)">◀</button>
           <button class="btn" onclick="stepBy(1)">▶</button>
+          <button class="btn" onclick="reset()">↺</button>
         </div>
         <div class="slider-wrap">
-          <div class="slider-header"><span class="slider-name">Speed</span><span class="slider-val" id="speed-label">8
+          <div class="slider-header"><span class="slider-name">Speed</span><span class="slider-val" id="speed-label">15
               fps</span></div>
-          <input type="range" min="1" max="60" value="8" oninput="setSpeed(this.value)">
-        </div>
-        <div class="slider-wrap">
-          <div class="slider-header"><span class="slider-name">Cell size</span><span class="slider-val"
-              id="cell-label">8 px</span></div>
-          <input type="range" min="2" max="32" value="8" oninput="setCellSize(this.value)">
+          <input type="range" min="1" max="60" value="15" oninput="setSpeed(this.value)">
         </div>
       </div>
     </div>
@@ -475,7 +471,7 @@
   </aside>
 
   <footer>
-    <span id="footer-left">demo · 32×32</span>
+    <span id="footer-left">- · -</span>
     <div class="playhead" id="playhead" onclick="seekToClick(event)">
       <div class="playhead-fill" id="ph-fill" style="width:0%"></div>
       <div class="playhead-thumb" id="ph-thumb" style="left:0%"></div>
@@ -488,7 +484,7 @@
     let colorMode = null, dmap = {}, cMin = 0, cMax = 1;
 
     const canvas = document.getElementById('grid-canvas'), ctx = canvas.getContext('2d');
-    const PAL = [ "#c7d7f9",
+    const PAL = ["#c7d7f9",
       '#f4a7b9', '#f7c5a0', '#fde68a', '#d4f1a0', '#a8e6cf',
       '#a0d4f5', '#b5c8f9', '#c8b5f9', '#e8b5f9', '#f9b5d8',
       '#f9c9b5', '#f9e6b5', '#e6f9b5', '#b5f9c9', '#b5f9e6',
@@ -502,7 +498,7 @@
       '#ffe4e1', '#ffecd5', '#fff9c4', '#e8ffc4', '#c4ffe8',
       '#c4f0ff', '#d5c4ff', '#f0c4ff', '#ffc4f0', '#ffc4d5',
     ];
-    
+
 
     function contColor(t) {
       const stops = [[239, 246, 255], [219, 234, 254], [147, 197, 253], [96, 165, 250], [37, 99, 235], [29, 78, 216], [30, 58, 138]];
@@ -524,18 +520,18 @@
     document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
 
     async function readFile(f) {
-        let text;
-        if (f.name.endsWith('.gz')) {
-            const buffer = await f.arrayBuffer();
-            const stream = new DecompressionStream('gzip');
-            const writer = stream.writable.getWriter();
-            writer.write(buffer); writer.close();
-            const out = await new Response(stream.readable).arrayBuffer();
-            text = new TextDecoder().decode(out);
-        } else {
-            text = await f.text();
-        }
-        try { loadPerf(JSON.parse(text)); } catch(err) { alert('Invalid file: ' + err); }
+      let text;
+      if (f.name.endsWith('.gz')) {
+        const buffer = await f.arrayBuffer();
+        const stream = new DecompressionStream('gzip');
+        const writer = stream.writable.getWriter();
+        writer.write(buffer); writer.close();
+        const out = await new Response(stream.readable).arrayBuffer();
+        text = new TextDecoder().decode(out);
+      } else {
+        text = await f.text();
+      }
+      try { loadPerf(JSON.parse(text)); } catch (err) { alert('Invalid file: ' + err); }
     }
 
     function loadPerf(data) {
@@ -567,6 +563,7 @@
           if (!hasFloat && !Number.isInteger(v)) hasFloat = true;
         }
       }
+      const unique = [...seen];
       if (hasFloat || seen.size > 12) {
         colorMode = 'continuous';
         cMin = Infinity;
@@ -589,7 +586,6 @@
       document.getElementById('stat-per').textContent = data.time_per_iteration != null ? (data.time_per_iteration * 1000).toFixed(2) : '—';
       document.getElementById('stat-size').textContent = `${w}×${h}`;
       document.getElementById('footer-left').textContent = `${colorMode} · ${w}×${h}`;
-      canvas.width = w * cs; canvas.height = h * cs;
 
       const maxT = Math.max(...keys.map(k => id[k]?.time || 0));
       const list = document.getElementById('iter-list'); list.innerHTML = '';
@@ -601,7 +597,7 @@
         list.appendChild(el);
       });
 
-      buildLegend(); goTo(0);
+      buildLegend(); requestAnimationFrame(() => goTo(0));
     }
 
     function buildLegend() {
@@ -617,7 +613,14 @@
     function render(idx) {
       if (!frames[idx]) return;
       const grid = frames[idx], h = grid.length, w = grid[0].length;
-      if (canvas.width !== w * cs || canvas.height !== h * cs) { canvas.width = w * cs; canvas.height = h * cs; }
+      // Fit grid to available canvas area, maintaining aspect ratio
+      const area   = document.querySelector('.canvas-area');
+      const padding = 20;
+      const maxW   = area.clientWidth  - padding;
+      const maxH   = area.clientHeight - padding;
+      cs = Math.max(1, Math.floor(Math.min(maxW / w, maxH / h)));
+      canvas.width  = w * cs;
+      canvas.height = h * cs;
       const img = ctx.createImageData(canvas.width, canvas.height), d = img.data;
       for (let i = 0; i < h; i++) for (let j = 0; j < w; j++) {
         const v = grid[i][j]; let r, g, b;
@@ -669,8 +672,11 @@
     }
     function stopPlay() { playing = false; clearInterval(timer); document.getElementById('btn-play').textContent = '▶ Play'; }
     function setSpeed(v) { fps = +v; document.getElementById('speed-label').textContent = v + ' fps'; if (playing) { stopPlay(); togglePlay(); } }
-    function setCellSize(v) { cs = +v; document.getElementById('cell-label').textContent = v + ' px'; if (frames.length) render(cur); }
-
+    function reset() {
+      stopPlay();
+      goTo(0);
+    }
+    window.addEventListener('resize', () => { if (frames.length) render(cur); });
   </script>
 </body>
 
