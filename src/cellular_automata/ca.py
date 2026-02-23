@@ -30,7 +30,8 @@ class CellularAutomata(ABC):
         value_type: CellValueType,
         value_options: Sequence,
         random_seed: int = 42,
-        max_thread_workers: int | None = None
+        max_thread_workers: int | None = None,
+        **kwargs,
     ):
         self.width = width
         self.height = height
@@ -59,6 +60,8 @@ class CellularAutomata(ABC):
                 "iteration_data": {}
                 }
         
+        for kname, kval in kwargs.items():
+            setattr(self, kname, kval)
         
     @property
     @abstractmethod
