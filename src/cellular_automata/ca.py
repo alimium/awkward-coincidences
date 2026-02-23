@@ -1,11 +1,11 @@
+import concurrent.futures
 import os
-import sys
 import time
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Iterable, Sequence
-from abc import ABC, abstractmethod
+
 import numpy as np
-import concurrent.futures
 
 
 class CellValueType(Enum):
@@ -220,18 +220,28 @@ class CellularAutomata(ABC):
     def export_performance(self, filename: str | None = None):
         if not self.performance['iteration_data']:
             print("No data to export. Make sure to run the simulation first and set log_mode=SimulationLogMode.FULL.")
+            return
 
+        import gzip
         import json
         if not filename:
-            filename = f"{self.__class__.__name__.lower()}_performance_{time.time()}.json"
+            filename = f"{self.__class__.__name__.lower()}_performance_{time.time()}.json.gz"
+        if not filename.endswith('.gz'):
+            filename += ".gz"
+        
 
         data = {}
         for k,v in self.performance.items():
             if k == 'iteration_data':
-                data[k] = {i: {'time': v[i]['time'], 'grid': v[i]['grid'].tolist()} for i in v}
+                data[k] = {
+                    i: {
+                        'time': v[i]['time'], 
+                        'grid': [[round(x, 4) for x in row] for row in v[i]['grid'].tolist()]
+                    } for i in v
+                    }
             else:
                 data[k] = v
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
+        with gzip.open(filename, 'wt', encoding='utf-8') as f:
+            json.dump(data, f, separators=(',', ':'))
 
         print(f"Performance data exported to {filename}")

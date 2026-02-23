@@ -424,7 +424,7 @@
       <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
         <path d="M3 7h18M3 12h18M3 17h18M7 3v18M12 3v18M17 3v18" stroke-opacity="0.4" />
       </svg>
-      Load a JSON file to start
+      Load a JSON or gzip file to start
     </div>
     <canvas id="grid-canvas" style="display:none"></canvas>
   </main>
@@ -434,9 +434,9 @@
     <div class="section">
       <div class="section-title">Load</div>
       <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        Drop performance JSON<br>or click to browse
+        Drop performance JSON or gzip<br>or click to browse
       </div>
-      <input type="file" id="file-input" accept=".json" style="display:none">
+      <input type="file" id="file-input" accept=".json,.gz" style="display:none">
     </div>
 
     <div class="section">
@@ -523,10 +523,19 @@
     });
     document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
 
-    function readFile(f) {
-      const r = new FileReader();
-      r.onload = e => { try { loadPerf(JSON.parse(e.target.result)); } catch (err) { alert('Invalid JSON: ' + err); } };
-      r.readAsText(f);
+    async function readFile(f) {
+        let text;
+        if (f.name.endsWith('.gz')) {
+            const buffer = await f.arrayBuffer();
+            const stream = new DecompressionStream('gzip');
+            const writer = stream.writable.getWriter();
+            writer.write(buffer); writer.close();
+            const out = await new Response(stream.readable).arrayBuffer();
+            text = new TextDecoder().decode(out);
+        } else {
+            text = await f.text();
+        }
+        try { loadPerf(JSON.parse(text)); } catch(err) { alert('Invalid file: ' + err); }
     }
 
     function loadPerf(data) {
