@@ -162,11 +162,15 @@ class CellularAutomata(ABC):
 
             if keep_history:
                 self.history[i] = np.copy(new_state)
+                
 
             self.grid = new_state
 
             if log_mode == SimulationLogMode.FULL:
-                self.performance['iteration_data'][i] = {"time": iter_end - iter_start}
+                self.performance['iteration_data'][i] = {
+                        "time": iter_end - iter_start,
+                        "grid": new_state,
+                        }
 
         if log_mode != SimulationLogMode.NONE:
             sim_end = time.perf_counter()
@@ -213,5 +217,21 @@ class CellularAutomata(ABC):
 
         plt.show()
 
+    def export_performance(self, filename: str | None = None):
+        if not self.performance['iteration_data']:
+            print("No data to export. Make sure to run the simulation first and set log_mode=SimulationLogMode.FULL.")
 
+        import json
+        if not filename:
+            filename = f"{self.__class__.__name__.lower()}_performance_{time.time()}.json"
 
+        data = {}
+        for k,v in self.performance.items():
+            if k == 'iteration_data':
+                data[k] = {i: {'time': v[i]['time'], 'grid': v[i]['grid'].tolist()} for i in v}
+            else:
+                data[k] = v
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=4)
+
+        print(f"Performance data exported to {filename}")
