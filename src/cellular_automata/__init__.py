@@ -1,7 +1,7 @@
-from .ca import CellularAutomata, CellValueType, ComputeMode, SimulationLogMode
+from .ca import CellularAutomaton, CellValueType, ComputeMode, SimulationLogMode
 
 __all__ = [
-    "CellularAutomata",
+    "CellularAutomaton",
     "CellValueType",
     "ComputeMode",
     "SimulationLogMode",

@@ -19,10 +19,10 @@ class SimulationLogMode(Enum):
     FULL = 2
 
 class ComputeMode(Enum):
-    CELL = 0
-    GRID = 1
+    SINGLE = 0
+    CONCURRENT = 1
 
-class CellularAutomata(ABC):
+class CellularAutomaton(ABC):
     def __init__(
         self,
         width: int,
@@ -33,11 +33,31 @@ class CellularAutomata(ABC):
         max_thread_workers: int | None = None,
         **kwargs,
     ):
+        self._validate_value_type_options(value_type, value_options)
+
         self.width = width
         self.height = height
+        self.value_options = value_options
+        self.value_type = value_type
+
         self.random_seed = random_seed
         self.max_thread_workers = max_thread_workers
+ 
+        self.grid = np.empty(shape=(self.height, self.width))
 
+        self.history = {}
+        self.performance = {
+                "num_iterations": None,
+                "total_time": None,
+                "time_per_iteration": None,
+                "total_compute": None,
+                "iteration_data": {}
+                }
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def _validate_value_type_options(self, value_type, value_options):
         if not value_options:
             raise ValueError("values_options cannot be empty.")
 
@@ -47,28 +67,12 @@ class CellularAutomata(ABC):
         if value_type == CellValueType.CONTINUOUS and len(value_options) != 2:
             raise ValueError(f"CellValueType.CONTINUOUS requires exactly 2 value_options but {len(value_options)} were given.")
 
-        self.value_options = value_options
-        self.value_type = value_type
- 
-        self.grid = np.empty(shape=(self.height, self.width))
-        self.history = {}
-        self.performance = {
-                "num_iterations": None,
-                "total_time": None,
-                "time_per_iteration": None,
-                "total_compute": None,
-                "iteration_data": {}
-                }
-        
-        for kname, kval in kwargs.items():
-            setattr(self, kname, kval)
-        
     @property
     @abstractmethod
     def compute_mode(self) -> ComputeMode:
         ...
 
-    def initialize(self, from_array: np.ndarray | Iterable | None = None) -> "CellularAutomata":
+    def initialize(self, from_array: np.ndarray | Iterable | None = None) -> "CellularAutomaton":
         """
         Initialize the cellular automata grid. If an array is given,
         it may be used to initialize the grid. Otherwise the grid
@@ -81,7 +85,7 @@ class CellularAutomata(ABC):
             CellularAutomata: The initialized cellular automata.
 
         Raises:
-            TypeError: If the input array is not convertibel to np.ndarray.
+            TypeError: If the input array is not convertible to np.ndarray.
             ValueError: If the input array does not have the same shape as the grid.
                 or if the input array values are not in the previously configured values options.
         """
@@ -99,7 +103,7 @@ class CellularAutomata(ABC):
         else:
             if not isinstance(from_array, np.ndarray):
                 try:
-                    from_array = np.array(from_array)
+                    from_array = np.asarray(from_array)
                 except Exception as e:
                     raise TypeError(f"{type(from_array)} is not castable to np.ndarray. {e}")
 
@@ -130,16 +134,14 @@ class CellularAutomata(ABC):
     def criteria(self, *args, **kwargs) -> np.ndarray | Any:
         ...
 
-    def step(self) -> np.ndarray:
-        if self.compute_mode == ComputeMode.GRID:
+    def step(self) -> np.ndarray | Any:
+        if self.compute_mode == ComputeMode.CONCURRENT:
             next_state = self.criteria()
             if not isinstance(next_state, np.ndarray):
                 raise TypeError(f"When using ComputeMode.GRID, criteria must return np.ndarray. {type(next_state)} was returned.")
             if next_state.shape != self.grid.shape:
                 raise ValueError(f"Expected shape {self.grid.shape} but got array with shape {next_state.shape}.")
-
-            return next_state
-        elif self.compute_mode == ComputeMode.CELL:
+        elif self.compute_mode == ComputeMode.SINGLE:
             coords = [(i, j) for i in range(self.height) for j in range(self.width)]
 
             def criteria_with_coords(coord):
@@ -148,9 +150,14 @@ class CellularAutomata(ABC):
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_thread_workers or 10) as executor:
                 next_state = tuple(executor.map(criteria_with_coords, coords))
 
-            return np.array(next_state).reshape(self.grid.shape)
+            next_state = np.array(next_state).reshape(self.grid.shape)
         else:
             raise ValueError(f"Compute mode {self.compute_mode} is not supported. Must be one of {ComputeMode}.")
+
+        return next_state
+
+    def update(self, next_state):
+        self.grid = next_state
 
     def run(self, max_iterations: int = 100, log_mode: SimulationLogMode = SimulationLogMode.MINIMAL, keep_history: bool = True) -> dict[str, Any]:
         if log_mode != SimulationLogMode.NONE:
@@ -159,21 +166,16 @@ class CellularAutomata(ABC):
         for i in range(max_iterations):
             if log_mode == SimulationLogMode.FULL:
                 iter_start = time.perf_counter()
-
-            new_state = self.step()
-            iter_end = time.perf_counter()
+                next_state = self.step()
+                iter_end = time.perf_counter()
+                self.save_snapshot(i, next_state, iter_end - iter_start)
+            else:
+                next_state = self.step()
 
             if keep_history:
-                self.history[i] = np.copy(new_state)
-                
+                self.history[i] = np.copy(next_state)
 
-            self.grid = new_state
-
-            if log_mode == SimulationLogMode.FULL:
-                self.performance['iteration_data'][i] = {
-                        "time": iter_end - iter_start,
-                        "grid": new_state,
-                        }
+            self.update(next_state)
 
         if log_mode != SimulationLogMode.NONE:
             sim_end = time.perf_counter()
@@ -182,6 +184,12 @@ class CellularAutomata(ABC):
             self.performance["time_per_iteration"] = (sim_end - sim_start) / (i + 1)
 
         return self.performance
+
+    def save_snapshot(self, iteration: int, state: Any, time_: float | None = None):
+        self.performance['iteration_data'][iteration] = {
+            "time": time_,
+            "grid": state,
+        }
 
     def display(self, iteration: int | None = None):
         for row in range(self.height):

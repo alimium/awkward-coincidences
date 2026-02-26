@@ -1,16 +1,16 @@
 import numpy as np
 from scipy.signal import convolve2d
 
-from cellular_automata import CellularAutomata, CellValueType, ComputeMode
+from cellular_automata import CellularAutomaton, CellValueType, ComputeMode
 
 
-class GameOfLife(CellularAutomata):
+class GameOfLife(CellularAutomaton):
     def __init__(self, width, height):
         super().__init__(width, height, CellValueType.DISCRETE, [0, 1], random_seed=42)
 
     @property
     def compute_mode(self):
-        return ComputeMode.GRID
+        return ComputeMode.CONCURRENT
 
     def criteria(self) -> np.ndarray:
         kernel = np.array([[1,1,1],[1,0,1],[1,1,1]])
