@@ -44,9 +44,11 @@ class Graph:
         self.nodes = range(num_nodes)
         self.edge_type = edge_type
 
-        self.node_labels: dict[int, Any] | None = (
-            {i: node_labels[i] for i in self.nodes} if node_labels is not None else None
-        )
+        self.node_labels: np.ndarray | None = (
+                np.asarray(node_labels) 
+                if node_labels is not None 
+                else None
+                )
 
         self._graph: dict[int, dict[int, float]] = self._build_graph(adjacency_matrix)
 

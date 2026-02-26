@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from cellular_automata.ca import CellularAutomaton, CellValueType
-from graph import Graph
+from graph import Graph, GraphEdgeType
 
 
 class GraphCellularAutomaton(CellularAutomaton):
@@ -33,13 +33,24 @@ class GraphCellularAutomaton(CellularAutomaton):
         self.graph = None
 
 
-    def initialize(self, from_adj_matrix: np.ndarray | Sequence | None = None, node_labels: Sequence | None = None):
+    def initialize(
+            self, 
+            from_adj_matrix: np.ndarray | Sequence | None = None, 
+            node_labels: Sequence | None = None,
+            edge_type: GraphEdgeType | None = None
+        ):
         super().initialize(from_array=from_adj_matrix)
+        if edge_type is None:
+            if np.array_equal(self.grid, self.grid.T):
+                edge_type = GraphEdgeType.UNDIRECTED
+            else:
+                edge_type = GraphEdgeType.DIRECTED
 
         self.graph = Graph(
                 num_nodes=self.width,
                 adjacency_matrix=self.grid,
                 node_labels=node_labels,
+                edge_type=edge_type,
                 )
         return self
 
@@ -54,8 +65,8 @@ class GraphCellularAutomaton(CellularAutomaton):
     ) -> None:
         self.performance["iteration_data"][iteration] = {
             "time": time_,
-            "grid": np.copy(state),
-            "node_states": np.copy(state.none_labels),
+            "grid": np.copy(state.adjacency_matrix),
+            "node_states": np.copy(state.node_labels),
         }
 
     def export_performance(self, filename: str | None = None) -> None:
