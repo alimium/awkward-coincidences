@@ -139,8 +139,6 @@ class CellularAutomaton(ABC):
             next_state = self.criteria()
             if not isinstance(next_state, np.ndarray):
                 raise TypeError(f"When using ComputeMode.GRID, criteria must return np.ndarray. {type(next_state)} was returned.")
-            if next_state.shape != self.grid.shape:
-                raise ValueError(f"Expected shape {self.grid.shape} but got array with shape {next_state.shape}.")
         elif self.compute_mode == ComputeMode.SINGLE:
             coords = [(i, j) for i in range(self.height) for j in range(self.width)]
 
